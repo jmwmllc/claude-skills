@@ -1,0 +1,8 @@
+{
+  "name": "jmwmllc",
+  "description": "jmwmllc's Claude Code skills. Currently: feedback-mode — installs a dev-only, framework-agnostic in-browser feedback-capture widget into any web project and defines the mission-control payload contract.",
+  "author": {
+    "name": "jmwmllc",
+    "email": "james@jmwmllc.com"
+  }
+}
