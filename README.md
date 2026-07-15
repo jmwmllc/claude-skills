@@ -10,10 +10,25 @@ In Claude Code, run:
 ```
 /plugin marketplace add jmwmllc/claude-skills
 /plugin install jmwmllc@claude-skills
+/reload-plugins          # REQUIRED — activates the plugin in your session
 ```
 
-That's it. Updates arrive automatically as new commits are pushed here; to force
-a refresh, run `/plugin marketplace update claude-skills`.
+The `/reload-plugins` step is easy to skip but essential — without it you'll get
+"Unknown command" when you try to use the skill.
+
+Updates arrive automatically as new commits are pushed here; to force a refresh,
+run `/plugin marketplace update claude-skills` (then `/reload-plugins`).
+
+## Using a skill
+
+Once installed and reloaded, either:
+
+- type the slash command, e.g. `/jmwmllc:feedback-mode`, **or**
+- just ask in plain language, e.g. *"add feedback mode to this project"* — the
+  skills are model-invoked too, so Claude picks the right one from its description.
+
+If a slash command reports "Unknown command", run `/reload-plugins`, and check
+`/plugin list` shows `jmwmllc` as enabled.
 
 ## What's included
 
