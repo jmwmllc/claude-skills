@@ -26,6 +26,7 @@
   var ENDPOINT = cfg.endpoint || "http://localhost:5599/__feedback";
   var REPORTER = cfg.reporter || null;
   var STORAGE_KEY = "__feedbackModeOn";
+  var TOGGLE_POS_KEY = "__feedbackTogglePos";
   var CONTRACT_VERSION = 1;
 
   /* ------------------------------------------------------------------ styles */
@@ -33,7 +34,9 @@
     "#__fb_toggle{position:fixed;top:14px;right:14px;z-index:2147483646;display:flex;",
     "align-items:center;gap:8px;font:600 12px/1 system-ui,sans-serif;color:#374151;",
     "background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:6px 10px 6px 12px;",
-    "box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:pointer;user-select:none}",
+    "box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:grab;user-select:none;touch-action:none}",
+    "#__fb_toggle.__fb_dragging{cursor:grabbing;box-shadow:0 6px 18px rgba(0,0,0,.22)}",
+    "#__fb_toggle .grip{color:#cbd5e1;font-size:14px;line-height:1;margin-right:1px}",
     "#__fb_toggle .sw{position:relative;width:38px;height:22px;border-radius:999px;",
     "background:#cbd5e1;transition:background .18s}",
     "#__fb_toggle .sw::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;",
@@ -76,7 +79,8 @@
     if (html != null) n.innerHTML = html;
     return n;
   }
-  var toggle = el("div", "__fb_toggle", "<span>Feedback</span><span class='sw'></span>");
+  var toggle = el("div", "__fb_toggle", "<span class='grip'>&#10303;</span><span>Feedback</span><span class='sw'></span>");
+  toggle.title = "Drag to move · click to toggle feedback mode";
   var capture = el("div", "__fb_capture");
   var rect = el("div", "__fb_rect");
   var pop = el("div", "__fb_pop",
@@ -98,9 +102,57 @@
     try { localStorage.setItem(STORAGE_KEY, on ? "1" : "0"); } catch (e) {}
     if (!on) resetSelection();
   }
+  // Click toggles feedback mode — unless the click was actually the end of a drag
+  // (see below), in which case we swallow it so moving the button doesn't also flip
+  // the mode.
+  var suppressClick = false;
   toggle.addEventListener("click", function () {
+    if (suppressClick) { suppressClick = false; return; }
     setMode(!document.body.classList.contains("__fb_active"));
   });
+
+  // The toggle can get in the way, so let it be dragged anywhere. We distinguish a
+  // drag from a click with a small movement threshold, clamp it to the viewport, and
+  // remember where it was left (per browser) so it stays put across reloads.
+  var tDrag = null;
+  function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  (function restoreTogglePos() {
+    try {
+      var p = JSON.parse(localStorage.getItem(TOGGLE_POS_KEY) || "null");
+      if (p && typeof p.left === "number") {
+        toggle.style.left = clampNum(p.left, 4, window.innerWidth - 60) + "px";
+        toggle.style.top = clampNum(p.top, 4, window.innerHeight - 40) + "px";
+        toggle.style.right = "auto";
+      }
+    } catch (e) {}
+  })();
+  toggle.addEventListener("mousedown", function (e) {
+    var r = toggle.getBoundingClientRect();
+    tDrag = { sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, moved: false };
+    e.preventDefault(); // avoid text selection while dragging
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (!tDrag) return;
+    var dx = e.clientX - tDrag.sx, dy = e.clientY - tDrag.sy;
+    if (!tDrag.moved && Math.abs(dx) + Math.abs(dy) < 4) return; // below threshold = still a click
+    tDrag.moved = true;
+    toggle.classList.add("__fb_dragging");
+    toggle.style.left = clampNum(tDrag.ox + dx, 4, window.innerWidth - toggle.offsetWidth - 4) + "px";
+    toggle.style.top = clampNum(tDrag.oy + dy, 4, window.innerHeight - toggle.offsetHeight - 4) + "px";
+    toggle.style.right = "auto";
+  });
+  window.addEventListener("mouseup", function () {
+    if (!tDrag) return;
+    if (tDrag.moved) {
+      suppressClick = true; // this mouseup will fire a click we don't want to act on
+      toggle.classList.remove("__fb_dragging");
+      try {
+        localStorage.setItem(TOGGLE_POS_KEY, JSON.stringify({ left: parseInt(toggle.style.left, 10), top: parseInt(toggle.style.top, 10) }));
+      } catch (e) {}
+    }
+    tDrag = null;
+  });
+
   var startOn = false;
   try { startOn = localStorage.getItem(STORAGE_KEY) === "1"; } catch (e) {}
   setMode(startOn);
