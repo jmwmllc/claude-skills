@@ -1,17 +1,17 @@
 ---
 name: feedback-mode
 description: >-
-  Install a dev-only, in-browser visual feedback capture widget into a web
-  project. It adds a green/gray toggle that lets you drag a bounding box over any
-  element and dictate or type a note, which is shipped (with the box coords, the
-  DOM element under it, the route, and a project ID) to a central "mission
-  control" dashboard — or a local queue while that dashboard is being built. Use
-  this skill whenever the user wants to add a feedback mechanism, a "feedback
-  mode", visual/click-to-comment bug reporting, a way to annotate the UI while
-  developing, or to wire a project into their mission control feedback pipeline —
-  even if they don't name the widget explicitly. This skill INSTALLS the capture
-  tool; it does not triage, approve, or apply the feedback (mission control and
-  the junior devs own that).
+  Install the per-app developer feedback system into a web project. Two pieces: a
+  dev-only visual capture widget (a green/gray toggle to drag a bounding box over
+  any element and type or dictate a note, shipped with DOM context + route +
+  project ID to a central "mission control" dashboard) AND an Admin panel (an
+  upper-right Admin button that opens a control panel scoped to that app, reading
+  its feedback back from mission control and triaging it). Use this skill whenever
+  the user wants to add a feedback mechanism, a "feedback mode", visual/
+  click-to-comment bug reporting, a way to annotate the UI while developing, an
+  in-app admin or triage panel, or to wire a project into their mission control
+  feedback pipeline — even if they don't name the widget explicitly. The pieces
+  are client-side; mission control remains the system of record they talk to.
 ---
 
 # Feedback mode
@@ -26,17 +26,26 @@ whoever acts on it later knows precisely what and where. Notes are POSTed to a
 central **mission control** dashboard the user is building; until that endpoint
 exists, they land in a local `feedback/queue.jsonl` so the tool is useful today.
 
-**Scope boundary — important.** This skill's job ends at *capture and ship*. It
-must NOT build triage UI, auto-apply changes, or open PRs from the queue. Acting
-on feedback is owned by mission control and the junior developers. If the user
-asks for that here, gently point out it belongs on the mission-control side and
-keep this install focused on capture.
+The skill also installs the **Admin panel** — a per-app, embedded triage surface
+(the "Satellite" from mission control's spec). An upper-right Admin button opens a
+control panel scoped to that app, showing its feedback (read from mission control)
+with triage actions.
+
+**Scope boundary.** This skill installs the *client-side* pieces (capture widget +
+admin panel). The admin panel reads and triages feedback **through mission
+control's API** (`GET`/`PATCH`) — it does not store feedback, run its own backend,
+or apply code changes itself. Mission control stays the system of record; the
+panel is a thin per-app client of it.
 
 ## The pieces (bundled in `assets/`)
 
-- **`feedback-widget.js`** — the whole widget: toggle, box-drawing, popup,
+- **`feedback-widget.js`** — the capture widget: toggle, box-drawing, popup,
   Web Speech transcription, and the POST. Framework-agnostic, no dependencies,
-  injects its own CSS. Copy it into the project as-is; don't rewrite it.
+  injects its own CSS. Copy it in as-is; don't rewrite it.
+- **`admin-panel.js`** — the per-app Admin panel: upper-right Admin button, no-op
+  password gate, a list of *this app's* feedback read from mission control, and
+  triage buttons that `PATCH` state back. Same self-contained vanilla-JS shape;
+  reuses `FEEDBACK_CONFIG`. Copy it in as-is.
 - **`feedback-server.js`** — a tiny zero-dependency Node collector for the local
   fallback. Only needed until mission control's endpoint is live.
 - **`references/payload-contract.md`** — the exact JSON each entry sends. Read it
@@ -94,14 +103,52 @@ Adapt paths to the project's conventions, but keep these steps:
    live voice transcription needs a Chromium browser (Chrome/Edge); typing works
    everywhere.
 
+## Installing the Admin panel (the embedded "Satellite")
+
+`admin-panel.js` gives the app an upper-right **Admin** button → a no-op password
+gate → a panel showing *this app's* feedback (read from mission control) with
+triage actions. It reuses the same `FEEDBACK_CONFIG` (`projectId` + `endpoint`) as
+the capture widget — the `endpoint` is the mission-control feedback URL, which the
+panel calls as `GET endpoint?projectId=…` and `PATCH endpoint/:id`.
+
+1. **Copy** `admin-panel.js` into the same dev/source tree as the widget
+   (e.g. `src/dev/admin-panel.js`), byte-identical.
+2. **Its gating differs from the capture widget and depends on whether the app is
+   publicly reachable:**
+   - **Internal / auth-gated apps** (team-only tools, or sites behind an auth
+     gate): load the panel **always, including production**, so devs can triage
+     from the live site. Move `FEEDBACK_CONFIG` *out* of any `DEV` guard so it's
+     set in prod too, keep the capture widget dev-only, and import the panel
+     unconditionally.
+   - **Genuinely public, end-user-facing apps** (e.g. a game with real players):
+     load the panel **dev-only** (`import.meta.env.DEV` / localhost), exactly like
+     the capture widget, so visitors never see or mutate feedback.
+3. **The password is a NO-OP placeholder** — submitting (even empty) opens the
+   panel; it enforces nothing today, and mission control's API is currently
+   unauthenticated. That is *why* public apps must keep the panel dev-only until
+   real auth (GitHub OAuth) lands. Never load the panel on a public site with the
+   no-op gate.
+
+Example — internal/auth-gated app (Vite):
+
+```js
+window.FEEDBACK_CONFIG = { projectId: "<project-id>", endpoint: "https://<mc>/api/feedback" };
+if (import.meta.env.DEV) import("./dev/feedback-widget.js"); // capture: dev-only
+import("./dev/admin-panel.js");                              // admin: live on internal apps
+```
+
+If TypeScript flags the `.js` import, add a one-line `admin-panel.d.ts`
+(`export {}`) next to it, same as the widget's.
+
 ## Configuration reference
 
-`window.FEEDBACK_CONFIG` (all optional except you'll almost always set `projectId`):
+`window.FEEDBACK_CONFIG` — shared by the capture widget and the admin panel
+(all optional except you'll almost always set `projectId`):
 
 | key         | purpose                                                        |
 |-------------|----------------------------------------------------------------|
-| `projectId` | routing key for mission control (default `"unknown-project"`)  |
-| `endpoint`  | where entries POST (default local `http://localhost:5599/__feedback`) |
+| `projectId` | routing key for mission control (default `"unknown-project"`); the admin panel also filters its list by it |
+| `endpoint`  | where entries POST *and* what the admin panel reads/triages from (default local `http://localhost:5599/__feedback`) |
 | `reporter`  | who's filing notes, if more than just the owner ever will      |
 
 ## When the user is building mission control
