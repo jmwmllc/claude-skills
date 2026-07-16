@@ -54,8 +54,9 @@
     "padding:8px 12px;cursor:pointer}",
     "#__fb_mic{background:#f1f5f9;color:#334155;width:36px;height:34px;display:flex;",
     "align-items:center;justify-content:center;font-size:16px}",
-    "#__fb_mic.rec{background:#fee2e2;color:#dc2626;animation:__fb_pulse 1.2s infinite}",
-    "@keyframes __fb_pulse{0%,100%{opacity:1}50%{opacity:.5}}",
+    "#__fb_mic.rec{background:#dcfce7;color:#16a34a;animation:__fb_pulse 1.4s infinite}",
+    "@keyframes __fb_pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}",
+    "70%{box-shadow:0 0 0 9px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}",
     "#__fb_submit{background:#22c55e;color:#fff;flex:1}",
     "#__fb_cancel{background:transparent;color:#6b7280}",
     "#__fb_hint{font-size:11px;color:#9ca3af;margin-top:6px}",
@@ -184,9 +185,33 @@
   }
 
   /* ----------------------------------------------------- speech-to-text */
-  var recog = null, recognizing = false;
+  // The textarea value is composed as: anchorText (whatever was typed by hand) +
+  // the accumulated speech. We keep finalized speech in `speechFinal` and only the
+  // still-changing `interim` transiently, so refining a phrase never erases earlier
+  // words ("transcribes over itself"), and dictation never wipes typed text/spaces.
+  var recog = null, wantRec = false;
+  var anchorText = "";   // manual text present before/around the speech session
+  var speechFinal = "";  // finalized speech accumulated this session
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { micBtn.style.display = "none"; }
+
+  function render() {
+    var spoken = (speechFinal + interimText()).trim();
+    textEl.value = anchorText
+      ? (spoken ? anchorText.replace(/\s+$/, "") + " " + spoken : anchorText)
+      : spoken;
+  }
+  var _interim = "";
+  function interimText() { return _interim; }
+
+  // A real user keystroke/paste fires "input" (programmatic .value assignment does
+  // NOT). When that happens, fold everything into anchorText so typing is preserved
+  // and future speech appends after it — this is what stops spaces from vanishing.
+  textEl.addEventListener("input", function () {
+    anchorText = textEl.value;
+    speechFinal = "";
+    _interim = "";
+  });
 
   function startMic() {
     if (!SR) return;
@@ -195,20 +220,37 @@
       recog.continuous = true;
       recog.interimResults = true;
       recog.lang = navigator.language || "en-US";
-      var base = "";
-      recog.onstart = function () { recognizing = true; micBtn.classList.add("rec"); base = textEl.value ? textEl.value + " " : ""; };
-      recog.onend = function () { recognizing = false; micBtn.classList.remove("rec"); };
-      recog.onerror = function () { recognizing = false; micBtn.classList.remove("rec"); };
+      anchorText = textEl.value;
+      speechFinal = ""; _interim = "";
+      wantRec = true;
+      recog.onstart = function () { micBtn.classList.add("rec"); };
+      recog.onerror = function (e) {
+        if (e && (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "aborted")) wantRec = false;
+      };
+      recog.onend = function () {
+        micBtn.classList.remove("rec");
+        // continuous recognition still stops on pauses; keep listening until the
+        // user (or submit/cancel) turns it off, so long dictation isn't cut short.
+        if (wantRec) { try { recog.start(); } catch (e) {} }
+      };
       recog.onresult = function (ev) {
-        var out = "";
-        for (var i = ev.resultIndex; i < ev.results.length; i++) out += ev.results[i][0].transcript;
-        textEl.value = base + out;
+        _interim = "";
+        for (var i = ev.resultIndex; i < ev.results.length; i++) {
+          var res = ev.results[i];
+          if (res.isFinal) speechFinal += res[0].transcript.trim() + " ";
+          else _interim += res[0].transcript;
+        }
+        render();
       };
       recog.start();
     } catch (e) { /* mic unavailable — typing still works */ }
   }
-  function stopMic() { if (recog && recognizing) { try { recog.stop(); } catch (e) {} } }
-  micBtn.addEventListener("click", function () { recognizing ? stopMic() : startMic(); });
+  function stopMic() {
+    wantRec = false;
+    if (recog) { try { recog.stop(); } catch (e) {} }
+    micBtn.classList.remove("rec");
+  }
+  micBtn.addEventListener("click", function () { wantRec ? stopMic() : startMic(); });
 
   /* ---------------------------------------------------------------- submit */
   function submit() {
