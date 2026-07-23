@@ -8,7 +8,7 @@
     {
       "name": "jmwmllc",
       "source": "./plugins/jmwmllc",
-      "description": "jmwmllc's Claude Code skills. Currently: feedback-mode — a dev-only, framework-agnostic in-browser feedback-capture widget that ships notes to a central mission-control dashboard."
+      "description": "jmwmllc's Claude Code skills. feedback-mode — a dev-only, framework-agnostic in-browser feedback-capture widget that ships notes to a central mission-control dashboard. agent-queue — set up an autonomous agent work queue (in-app flag + bearer-token list/ack API + local puller + scheduled worker that builds, verifies, commits, and acks queued tasks, with safety rails and self-expiry)."
     }
   ]
 }

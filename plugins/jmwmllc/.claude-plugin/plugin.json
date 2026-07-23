@@ -1,6 +1,6 @@
 {
   "name": "jmwmllc",
-  "description": "jmwmllc's Claude Code skills. Currently: feedback-mode — installs a dev-only, framework-agnostic in-browser feedback-capture widget into any web project and defines the mission-control payload contract.",
+  "description": "jmwmllc's Claude Code skills. feedback-mode — installs a dev-only, framework-agnostic in-browser feedback-capture widget into any web project and defines the mission-control payload contract. agent-queue — sets up an autonomous agent work queue: an in-app 'send to agent' flag, a bearer-token list/ack API, a local puller, and a scheduled worker that builds/verifies/commits/acks queued tasks, with safety rails and a self-expiry.",
   "author": {
     "name": "jmwmllc",
     "email": "james@jmwmllc.com"

@@ -43,6 +43,18 @@ local queue while that dashboard is being built).
 Ask Claude something like *"add feedback mode to this project"* once the plugin
 is installed.
 
+### `agent-queue`  →  invoke as `/jmwmllc:agent-queue`
+
+Sets up an **autonomous agent work queue** in a project: a "send to agent" flag
+in the app, a small bearer-token-authenticated list/ack API, a thin local puller
+script, and a scheduled coding agent (e.g. Claude Code) that wakes every few
+hours to build, **verify**, commit, push, and ack each queued task — with hard
+safety rails and a self-expiry. It's the generalized version of this team's
+"Send to Claude" queue; the skill carries the full spec as reference material.
+
+Ask Claude something like *"set up an agent work queue in this project"* or
+*"I want to queue tasks and have an agent build them automatically"*.
+
 ## Repo layout
 
 ```
@@ -50,7 +62,8 @@ is installed.
 plugins/jmwmllc/
 ├── .claude-plugin/plugin.json     # plugin manifest
 └── skills/
-    └── feedback-mode/             # the skill (SKILL.md + assets + references)
+    ├── feedback-mode/            # the skill (SKILL.md + assets + references)
+    └── agent-queue/             # the skill (SKILL.md + references/spec)
 ```
 
 To add more skills later, drop another folder under
