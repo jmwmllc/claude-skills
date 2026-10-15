@@ -1,0 +1,28 @@
+{
+  "name": "dynamic-todos-sessions",
+  "version": "0.6.0",
+  "author": { "name": "Jim Whiting", "email": "james@jmwmllc.com" },
+  "description": "Logs each Claude Code session as a task in Dynamic Todos, under an agent named for this computer, and sets off its follow-up alarm whenever Claude needs you.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "computer": {
+      "type": "string",
+      "title": "This computer's name",
+      "description": "The Dynamic Todos agent this computer's sessions go under, e.g. Gaming PC. Blank uses the computer's own name.",
+      "default": ""
+    },
+    "url": {
+      "type": "string",
+      "title": "Dynamic Todos address",
+      "description": "Where the app runs.",
+      "default": "https://cheviot-work-hub-production.up.railway.app"
+    },
+    "token": {
+      "type": "string",
+      "title": "Dynamic Todos token",
+      "description": "The app's CLAUDE_QUEUE_TOKEN (the same one the Send to Claude queue uses).",
+      "sensitive": true,
+      "default": ""
+    }
+  }
+}
