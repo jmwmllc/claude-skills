@@ -11,7 +11,8 @@ import type { Session } from '../types'
 //   - each turn Claude finishes → one line on the task, and its follow-up alarm
 //     goes off at once: Claude is waiting on you;
 //   - Claude stops mid-turn to ask you something (a permission prompt, a
-//     question) → the alarm goes off at once, with no line;
+//     question) → the alarm goes off at once, with no line, and says what
+//     Claude is asking ("asks: Which account…?", "wants to use Bash: npm test");
 //   - you answer (a prompt, the permission, the question) → it stops;
 //   - a prompt that starts a clearly different task → the task is renamed for
 //     it, and the Claude session too at your next prompt (hooks can only name
@@ -30,7 +31,9 @@ let hasWarned = false
 // end of a turn, or a question it stopped to ask mid-turn. Your next prompt
 // answers either; a tool going on after a permission prompt or question
 // answers only 'ask'.
-let waiting: { kind: 'turn' | 'ask'; sessionId: string } | null = null
+// `exact` is set once the app has been told precisely what Claude asks (the
+// tool and its command, or the questions), not just the notification's words.
+let waiting: { kind: 'turn' | 'ask'; sessionId: string; exact?: boolean } | null = null
 // The session's name as Claude shows it ("CPB billing"), from the latest
 // prompt; the task carries it verbatim. Empty until Claude has named it.
 let sessionTitle = ''
@@ -162,10 +165,38 @@ async function reportTurn($: EngineInterface, config: Config, sessionId: string,
   await send($, config, 'turn', { ...value, sessionTitle, answer: answer.slice(0, 2000) })
 }
 
-// Tell the app: Claude needs you, or you're back, for a session that has a task.
-async function signal($: EngineInterface, config: Config, sessionId: string, path: 'attention' | 'back') {
+// Tell the app: Claude needs you (and for what), or you're back, for a
+// session that has a task.
+async function signal($: EngineInterface, config: Config, sessionId: string, path: 'attention' | 'back', waitingOn?: string) {
   await starting
-  await send($, config, path, { sessionId })
+  await send($, config, path, waitingOn ? { sessionId, waitingOn } : { sessionId })
+}
+
+// One line on what Claude is waiting for, for the alarm bar in Dynamic Todos
+// (James, 17 Oct 2026: "It would be nice for Dynamic ToDos to tell me what it
+// needs").
+const short = (text: unknown, max: number) => {
+  const s = String(text ?? '').replace(/\s+/g, ' ').trim()
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s
+}
+
+function toolAsk(tool: string, input: unknown) {
+  // mcp__<server>__<tool> reads as just the tool.
+  const name = tool.startsWith('mcp__') ? tool.split('__').slice(2).join('__') || tool : tool
+  const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  const arg = ['command', 'file_path', 'path', 'url', 'pattern', 'query', 'description', 'prompt']
+    .map(k => args[k]).find(v => typeof v === 'string' && v.trim())
+  return `wants to use ${name}${arg ? `: ${short(arg, 160)}` : ''}`
+}
+
+type Question = { question?: string; options?: { label?: string }[] }
+function questionsAsk(questions: unknown) {
+  const qs = (Array.isArray(questions) ? questions : []) as Question[]
+  if (!qs.length) return 'has a question for you'
+  return 'asks: ' + qs.map(q => {
+    const labels = (q.options ?? []).map(o => o.label).filter(Boolean)
+    return `${short(q.question, 160)}${labels.length ? ` (${labels.join(' / ')})` : ''}`
+  }).join(' · ')
 }
 
 // The session this one has filed, if it's the current one.
@@ -175,15 +206,19 @@ async function filedSession($: EngineInterface) {
   return value?.sessionId === sessionId ? sessionId : null
 }
 
-async function needsYou($: EngineInterface, options: PluginOptions) {
-  if (waiting) return
+// `what` is one line on what Claude asks. `exact` marks the precise version
+// (the tool and its command, the questions) over a notification's general
+// words: when the notification came first, the precise one follows it as an
+// update. Otherwise one alarm per wait.
+async function needsYou($: EngineInterface, options: PluginOptions, what: string, exact: boolean) {
+  if (waiting && !(waiting.kind === 'ask' && exact && !waiting.exact)) return
   const config = await readConfig($, options)
   if (!config.token || !config.base) return
-  const sessionId = await filedSession($)
+  const sessionId = waiting?.sessionId ?? await filedSession($)
   if (!sessionId) return
-  waiting = { kind: 'ask', sessionId }
+  waiting = { kind: 'ask', sessionId, exact }
   $.clock.after(0, () => {
-    signal($, config, sessionId, 'attention').catch(() => {})
+    signal($, config, sessionId, 'attention', what).catch(() => {})
   })
 }
 
@@ -271,16 +306,16 @@ export const register: Register = (on, options) => {
   // A permission prompt or a question dialog: Claude is stuck until you answer.
   on('classic.Notification', async ($, e, next) => {
     if (e.notification_type === 'permission_prompt' || e.notification_type === 'elicitation_dialog') {
-      await needsYou($, options)
+      await needsYou($, options, short(e.message, 300) || 'needs you', false)
     }
     return next(e)
   })
   on('classic.PermissionRequest', async ($, e, next) => {
-    await needsYou($, options)
+    await needsYou($, options, toolAsk(e.tool_name, e.tool_input), true)
     return next(e)
   })
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
-    await needsYou($, options)
+    await needsYou($, options, questionsAsk((e as { questions?: unknown }).questions), true)
     return next(e)
   })
   // Whatever the tool, once it goes on (or is turned down) you've answered.

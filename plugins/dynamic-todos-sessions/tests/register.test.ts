@@ -223,6 +223,24 @@ test('a permission prompt sets the alarm off; answering it stops it', { options:
   await $.tool.call({ tool: 'Bash', command: 'npm test' } as never)
   await clock.settle()
   expect(todos.paths()).toEqual(['prompt', 'start', 'attention', 'back'])
+  // The alarm says what Claude wants.
+  expect(todos.sent.find(s => s.path === 'attention')?.body.waitingOn).toBe('wants to use Bash: npm test')
+})
+
+test('when the notification comes first, the exact ask follows as an update', { options: OPTIONS }, async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  const todos = app(on)
+  on('session.id', () => ({ value: 'session-1' }))
+  on('session.cwd', () => ({ value: '/w' }))
+
+  await $.prompt.submit(prompt('Deploy it'))
+  await clock.settle()
+  await $.classic.Notification({ message: 'Claude needs your permission to use Railway', notification_type: 'permission_prompt' })
+  await $.classic.PermissionRequest({ tool_name: 'mcp__railway__redeploy', tool_input: { description: 'Redeploy the web service' } } as never)
+  await clock.settle()
+  const asks = todos.sent.filter(s => s.path === 'attention').map(s => s.body.waitingOn)
+  expect(asks).toEqual(['Claude needs your permission to use Railway', 'wants to use redeploy: Redeploy the web service'])
 })
 
 test('a question from Claude sets the alarm off until you answer it', { options: OPTIONS }, async ($, on) => {
@@ -234,9 +252,12 @@ test('a question from Claude sets the alarm off until you answer it', { options:
 
   await $.prompt.submit(prompt('Plan it with me'))
   await clock.settle()
-  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [
+    { question: 'Which account should the IRA go to?', header: 'Account', multiSelect: false, options: [{ label: 'Schwab', description: '' }, { label: 'Fidelity', description: '' }] },
+  ] } as never)
   await clock.settle()
   expect(todos.paths()).toEqual(['prompt', 'start', 'attention', 'back'])
+  expect(todos.sent.find(s => s.path === 'attention')?.body.waitingOn).toBe('asks: Which account should the IRA go to? (Schwab / Fidelity)')
 })
 
 // Claude passes the session's name with each prompt; a test raises that the
