@@ -13,7 +13,7 @@
     {
       "name": "dynamic-todos-sessions",
       "source": "./plugins/dynamic-todos-sessions",
-      "description": "Files each Claude Code session as a task in Dynamic Todos, under an agent named for the computer, renames it when the work changes, and sets off its follow-up alarm whenever Claude needs you. Set up from Dynamic Todos: ⚙ menu, Connect a computer to Claude Code."
+      "description": "Files each Claude Code session as a task in Dynamic Todos, under an agent named for the computer, one task per session, titled for the work and following it as it changes, and sets off its follow-up alarm whenever Claude needs you. Set up from Dynamic Todos: ⚙ menu, Connect a computer to Claude Code."
     }
   ]
 }

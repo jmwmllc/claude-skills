@@ -1,6 +1,6 @@
 {
   "name": "dynamic-todos-sessions",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "author": { "name": "Jim Whiting", "email": "james@jmwmllc.com" },
   "description": "Logs each Claude Code session as a task in Dynamic Todos, under an agent named for this computer, and sets off its follow-up alarm whenever Claude needs you.",
   "types": "./types/index.d.ts",

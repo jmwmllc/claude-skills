@@ -3,20 +3,21 @@ import type { EngineInterface, PluginOptions, Register } from 'claude-code'
 import type { Session } from '../types'
 
 // Claude Code work becomes tasks in Dynamic Todos (James, 12 Oct 2026):
-//   - your prompt → joins the session's task, which carries the session's name
-//     exactly as Claude shows it ("CPB billing"); a new session, or a prompt
-//     after 3 quiet hours, starts a fresh one (an AI title stands in until
-//     Claude has named the session). Tasks go inside the agent named for this
-//     computer (the app makes the agent if it isn't there);
+//   - your prompt → joins the session's task; a new session, or the first
+//     prompt after you've marked its task done, starts one, titled in a few
+//     words for the work. The app leads the title with the session's name up
+//     to the colon ("CPP1: Megan Helfand rebalance" for "CPP1:idle"). Tasks go
+//     inside the agent named for this computer (the app makes the agent if it
+//     isn't there);
 //   - each turn Claude finishes → one line on the task, and its follow-up alarm
 //     goes off at once: Claude is waiting on you;
 //   - Claude stops mid-turn to ask you something (a permission prompt, a
 //     question) → the alarm goes off at once, with no line, and says what
 //     Claude is asking ("asks: Which account…?", "wants to use Bash: npm test");
 //   - you answer (a prompt, the permission, the question) → it stops;
-//   - a prompt that starts a clearly different task → the task is renamed for
-//     it, and the Claude session too at your next prompt (hooks can only name
-//     a session as a prompt goes in), so the two names still match.
+//   - a prompt that moves the work on to something clearly different → the
+//     task's title follows it (James, 21 Oct 2026: "it just needs to evolve").
+//     The Claude session's own name is yours and is never changed.
 // The app does the filing (routes/claudeSessions.js); this only reports. It
 // never holds up a prompt: the requests run on a timer, after the hook returns,
 // and a failed one is dropped with one notice per load.
@@ -34,15 +35,10 @@ let hasWarned = false
 // `exact` is set once the app has been told precisely what Claude asks (the
 // tool and its command, or the questions), not just the notification's words.
 let waiting: { kind: 'turn' | 'ask'; sessionId: string; exact?: boolean } | null = null
-// The session's name as Claude shows it ("CPB billing"), from the latest
-// prompt; the task carries it verbatim. Empty until Claude has named it.
+// The session's name as Claude shows it ("CPP1:idle"), from the latest
+// prompt; the app reads the part before the colon. Empty until it's named.
 let sessionTitle = ''
-// A change of task (James, 15 Oct 2026): the new name waiting to be given to
-// the Claude session at the next prompt, the name Claude last reported (so a
-// rename you make yourself meanwhile wins), and your last few prompts, which
-// the check reads for context.
-let pendingTitle = ''
-let seenTitle = ''
+// Your last few prompts, which the change-of-work check reads for context.
 let recentPrompts: string[] = []
 // Shorter prompts ("yes", "go ahead", "now the tests") are follow-ups; they
 // never rename anything, and cost no check.
@@ -128,9 +124,9 @@ async function newTaskTitle($: EngineInterface, current: string, recent: string[
   return said
 }
 
-// Your prompt: join the session's task (the app renames it to the session's
-// name if that's changed), or — a new session, or after 3 quiet hours — start
-// one, named for the session, or with an AI title until Claude names it.
+// Your prompt: join the session's task (the app picks up a change of session
+// name), or — a new session, or its task marked done — start one, titled for
+// the work.
 async function reportPrompt($: EngineInterface, config: Config, claim: Session, prompt: string, named: string) {
   const cwd = await $.session.cwd()
   const folder = cwd.split(/[\\/]/).filter(Boolean).pop() || ''
@@ -146,13 +142,13 @@ async function reportPrompt($: EngineInterface, config: Config, claim: Session, 
     if (!renamed) return
     await send($, config, 'rename', { sessionId: claim.sessionId, title: renamed })
     await $.state.set(SESSION, { ...claim, title: renamed, folder })
-    sessionTitle = renamed
-    pendingTitle = renamed
     return
   }
   if (r.needsTask) {
     recentPrompts = [prompt]
-    const session: Session = { ...claim, title: named || await titleFor($, prompt), folder }
+    // Always the work's own title: the session's name is a slot ("CPP1"), not
+    // what the work is.
+    const session: Session = { ...claim, title: await titleFor($, prompt), folder }
     await $.state.set(SESSION, session)
     await send($, config, 'start', { ...session, sessionTitle: named })
   }
@@ -281,25 +277,15 @@ export const register: Register = (on, options) => {
     return done
   })
 
-  // The session's name, as Claude passes it with each prompt and at start —
-  // and where a waiting new name is given to the session, unless you've
-  // renamed it yourself since (then yours wins).
+  // The session's name, as Claude passes it with each prompt and at start.
+  // Read only: the mod never renames your session.
   on('classic.UserPromptSubmit', async ($, e, next) => {
     const reported = (e.session_title || '').trim()
-    if (pendingTitle && reported && seenTitle && reported !== seenTitle) pendingTitle = ''
-    if (reported) seenTitle = reported
-    if (pendingTitle) {
-      const title = pendingTitle
-      pendingTitle = ''
-      sessionTitle = title
-      seenTitle = title
-      return { ...(await next(e)), sessionTitle: title }
-    }
     if (reported) sessionTitle = reported
     return next(e)
   })
   on('classic.SessionStart', async ($, e, next) => {
-    if (e.session_title) sessionTitle = seenTitle = e.session_title.trim()
+    if (e.session_title) sessionTitle = e.session_title.trim()
     return next(e)
   })
 

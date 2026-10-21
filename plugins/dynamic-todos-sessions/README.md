@@ -2,9 +2,9 @@
 
 A Claude Code mod that files each Claude Code session as a task in Dynamic Todos.
 
-- **Each session gets a task named exactly what Claude calls the session** (the name in the desktop app's left panel, e.g. "CPB billing"). Rename the session and the task follows at your next prompt. Before Claude has named a new session, a short AI-written title stands in. Tasks go inside the agent named for the computer you're on, e.g. "Gaming PC", which is created if it isn't there yet. Like any new task in an agent, it starts with your default follow-up alarm.
-- **A prompt that starts a clearly different task** renames the task to match (a quick check by Claude's small Haiku model; follow-ups and prompts under six words are never renamed). The Claude session gets the same new name at your next prompt, so the two still match. If you rename the session yourself in the meantime, your name wins.
-- **Within 3 hours of your last prompt on it**, a task carries on: further prompts in the session, a `/clear`, or another session with the same name join it. After 3 quiet hours, your next prompt starts a fresh task (with the same name).
+- **Each session gets one task, titled for the work** in a few words (by Claude's small Haiku model). If you've named the session with a colon, the title starts with the part before it: a session named "CPP1:idle" files "CPP1: Megan Helfand rebalance". Your session's name is never changed. Tasks go inside the agent named for the computer you're on, e.g. "Gaming PC", which is created if it isn't there yet. Like any new task in an agent, it starts with your default follow-up alarm.
+- **When the work moves on to something clearly different**, the task's title follows it (follow-ups and prompts under six words are never checked). A title you change yourself in Dynamic Todos is kept.
+- **A session keeps its task until you mark it done**, however long it sits quiet. After that, its next prompt starts a new task. A `/clear`, or another session with the same name, carries on the same task. Delete the task and that session files nothing more.
 - **Each turn Claude finishes** adds one timestamped line to that task and sets its follow-up alarm off straight away: Claude is waiting on you.
 - **Claude stopping mid-turn to ask you something** (a permission prompt, a question) sets the alarm off too, with no line.
 - **Answering** (your next prompt, the permission, the question) stops the ringing; the alarm goes back to waiting (bell lit) while Claude works.

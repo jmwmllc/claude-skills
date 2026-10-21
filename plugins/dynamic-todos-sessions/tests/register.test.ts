@@ -267,23 +267,23 @@ async function namedPrompt($: any, text: string, sessionTitle: string) {
   await $.prompt.submit(prompt(text))
 }
 
-test("a named session's task is called exactly what Claude calls it, with no AI title", { options: OPTIONS }, async ($, on) => {
+test("a named session's task still gets a title for the work; the name goes along for the app", { options: OPTIONS }, async ($, on) => {
   const clock = mock.clock(on)
   engine(on)
-  const todos = app(on)
+  const todos = app(on, { title: 'Megan Helfand rebalance' })
   on('session.id', () => ({ value: 'session-1' }))
   on('session.cwd', () => ({ value: '/w' }))
 
-  await namedPrompt($, 'Look at the March CPB invoices', 'CPB billing')
+  await namedPrompt($, 'Rebalance Megan Helfand to her target date fund', 'CPP1:idle')
   await clock.settle()
   expect(todos.paths()).toEqual(['prompt', 'start'])
-  expect(todos.sent[0]?.body.sessionTitle).toBe('CPB billing')
-  expect(todos.sent[1]?.body).toEqual(expect.objectContaining({ title: 'CPB billing', sessionTitle: 'CPB billing' }))
-  expect(todos.state.titles).toBe(0)
+  expect(todos.sent[0]?.body.sessionTitle).toBe('CPP1:idle')
+  expect(todos.sent[1]?.body).toEqual(expect.objectContaining({ title: 'Megan Helfand rebalance', sessionTitle: 'CPP1:idle' }))
+  expect(todos.state.titles).toBe(1)
 
   await $.turn.complete(turn('Found two duplicates.'))
   await clock.settle()
-  expect(todos.sent[2]?.body).toEqual(expect.objectContaining({ sessionTitle: 'CPB billing' }))
+  expect(todos.sent[2]?.body).toEqual(expect.objectContaining({ sessionTitle: 'CPP1:idle' }))
 })
 
 test('a rename in Claude goes over with the next prompt', { options: OPTIONS }, async ($, on) => {
@@ -303,33 +303,33 @@ test('a rename in Claude goes over with the next prompt', { options: OPTIONS }, 
   expect(todos.sent[2]).toEqual(expect.objectContaining({ path: 'prompt', body: expect.objectContaining({ sessionTitle: 'Schwab alerts' }) }))
 })
 
-test('a prompt that starts a different task renames the task, then the session at the next prompt', { options: OPTIONS }, async ($, on) => {
+test('work that moves on renames the task, never the Claude session', { options: OPTIONS }, async ($, on) => {
   const clock = mock.clock(on)
   engine(on)
-  // Model calls in order: the change-of-task check says it's new work.
-  const todos = app(on, { replies: ['Schwab alert setup'] })
+  // Model calls in order: the new task's title, then the change-of-work check.
+  const todos = app(on, { replies: ['CPB invoice duplicates', 'Schwab alert setup'] })
   on('session.id', () => ({ value: 'session-1' }))
   on('session.cwd', () => ({ value: '/w' }))
 
-  await namedPrompt($, 'Look at the March CPB invoices for duplicates', 'CPB billing')
+  await namedPrompt($, 'Look at the March CPB invoices for duplicates', 'CPP1:idle')
   await clock.settle()
-  await namedPrompt($, 'Now set up price alerts in Schwab for my three biggest positions', 'CPB billing')
+  await namedPrompt($, 'Now set up price alerts in Schwab for my three biggest positions', 'CPP1:idle')
   await clock.settle()
   expect(todos.paths()).toEqual(['prompt', 'start', 'prompt', 'rename'])
   expect(todos.sent[3]?.body).toEqual({ sessionId: 'session-1', title: 'Schwab alert setup', computer: 'Gaming PC' })
 
-  // The next prompt gives the Claude session the same name.
-  const result = await $.classic.UserPromptSubmit({ prompt: 'Start with NVDA', session_title: 'CPB billing' } as never)
-  expect(result.sessionTitle).toBe('Schwab alert setup')
+  // Your session keeps the name you gave it.
+  const result = await $.classic.UserPromptSubmit({ prompt: 'Start with NVDA', session_title: 'CPP1:idle' } as never)
+  expect(result.sessionTitle).toBeUndefined()
   await $.prompt.submit(prompt('Start with NVDA'))
   await clock.settle()
-  expect(todos.sent[4]).toEqual(expect.objectContaining({ path: 'prompt', body: expect.objectContaining({ sessionTitle: 'Schwab alert setup' }) }))
+  expect(todos.sent[4]).toEqual(expect.objectContaining({ path: 'prompt', body: expect.objectContaining({ sessionTitle: 'CPP1:idle' }) }))
 })
 
-test('more of the same task renames nothing; short follow-ups are not even checked', { options: OPTIONS }, async ($, on) => {
+test('more of the same work renames nothing; short follow-ups are not even checked', { options: OPTIONS }, async ($, on) => {
   const clock = mock.clock(on)
   engine(on)
-  const todos = app(on, { replies: ['SAME'] })
+  const todos = app(on, { replies: ['CPB invoice duplicates', 'SAME'] })
   on('session.id', () => ({ value: 'session-1' }))
   on('session.cwd', () => ({ value: '/w' }))
 
@@ -340,26 +340,7 @@ test('more of the same task renames nothing; short follow-ups are not even check
   await namedPrompt($, 'yes go ahead', 'CPB billing')
   await clock.settle()
   expect(todos.paths()).toEqual(['prompt', 'start', 'prompt', 'prompt'])
-  expect(todos.state.titles).toBe(1) // the one check; the short follow-up cost nothing
+  expect(todos.state.titles).toBe(2) // the title and the one check; the short follow-up cost nothing
   const result = await $.classic.UserPromptSubmit({ prompt: 'next', session_title: 'CPB billing' } as never)
   expect(result.sessionTitle).toBeUndefined()
-})
-
-test('a rename you make yourself wins over a waiting one', { options: OPTIONS }, async ($, on) => {
-  const clock = mock.clock(on)
-  engine(on)
-  const todos = app(on, { replies: ['Schwab alert setup'] })
-  on('session.id', () => ({ value: 'session-1' }))
-  on('session.cwd', () => ({ value: '/w' }))
-
-  await namedPrompt($, 'Look at the March CPB invoices for duplicates', 'CPB billing')
-  await clock.settle()
-  await namedPrompt($, 'Now set up price alerts in Schwab for my three biggest positions', 'CPB billing')
-  await clock.settle()
-  // You renamed the session in Claude before your next prompt.
-  const result = await $.classic.UserPromptSubmit({ prompt: 'Start with NVDA', session_title: 'Brokerage alerts' } as never)
-  expect(result.sessionTitle).toBeUndefined()
-  await $.prompt.submit(prompt('Start with NVDA'))
-  await clock.settle()
-  expect(todos.sent[4]?.body.sessionTitle).toBe('Brokerage alerts')
 })
