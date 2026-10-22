@@ -2,7 +2,7 @@
 
 A Claude Code mod that files each Claude Code session as a task in Dynamic Todos.
 
-- **Each session gets one task, titled for the work** in a few words (by Claude's small Haiku model). If you've named the session with a colon, the title starts with the part before it: a session named "CPP1:idle" files "CPP1: Megan Helfand rebalance". Your session's name is never changed. Tasks go inside the agent named for the computer you're on, e.g. "Gaming PC", which is created if it isn't there yet. Like any new task in an agent, it starts with your default follow-up alarm.
+- **Each session gets one task, titled for the work** in a few words (by Claude's small Haiku model). Dynamic Todos shows the computer and session after the title, so you can find it in Claude: "Megan Helfand rebalance (Black Tape Mac · CPP1)" for a session named "CPP1:idle". Your session's name is never changed. Tasks go inside the agent named for the computer you're on, e.g. "Gaming PC", which is created if it isn't there yet. Like any new task in an agent, it starts with your default follow-up alarm.
 - **When the work moves on to something clearly different**, the task's title follows it (follow-ups and prompts under six words are never checked). A title you change yourself in Dynamic Todos is kept.
 - **A session keeps its task until you mark it done**, however long it sits quiet. After that, its next prompt starts a new task. A `/clear`, or another session with the same name, carries on the same task. Delete the task and that session files nothing more.
 - **Each turn Claude finishes** adds one timestamped line to that task and sets its follow-up alarm off straight away: Claude is waiting on you.
